@@ -7,7 +7,6 @@
 
 import sqlite3
 import csv
-import numpy as np
 import pandas as pd
 
 def escapestring(stng):
@@ -16,11 +15,14 @@ def escapestring(stng):
 
 # dict_to_insert and dict_to_update take a Python dictionary and turn it into
 # an SQL INSERT or UPDATE.
+#
 # Types on the values in the dictionary are assumed to be correct!
 # I.e. numbers should be floats and ints, and strings should be strings
 # (not numbers represented as strings or vice-versa or anything like that)
+#
 # This is useful because we can construct a Python dictionary once, then
 # use it to either insert or update.
+#
 def dict_to_insert(tblname, insdct):
     """Converts a dictionary of fields to be inserted into an SQL INSERT."""
     fields = ''
@@ -59,10 +61,20 @@ def dict_to_update(tblname, updatedct, whereclause):
     return sql
 
 # csv_to_database pulls a CSV file into a database.
+#
 # This function does NOT create the fields!
+#
 # It can't do that because it doesn't know the types for each column!
+#
 # YOU must create the table with the correct field names and types before calling this function.
+#
 # Column names much match field names in the CSV.
+#
+# The "rename_fields" parameter enables you to rename fields as you import,
+# in case there is some reason why the names in the CSV file can't be used in
+# SQL or you don't like them. For example you could change the word "cast" to
+# "performers" because the word "cast" is an SQL keyword.
+#
 def csv_to_database(csv_file, tblname, rename_fields, dbcu):
     """Pulls a CSV file into a database table. The table needs to already be created."""
     fieldnames = []
@@ -86,10 +98,13 @@ def csv_to_database(csv_file, tblname, rename_fields, dbcu):
                 dbcu.execute(sql)
             rownum = rownum + 1
 
-# map_column creates a new column with a value from an existing column mapped through a function
+# map_column creates a new column with a value from an existing column mapped through a function.
+#
 # This is one thing that's easier to do in Pandas than SQL.
+#
 # In Pandas this functionality is built-in but here we have to do it ourselves.
-def map_colum(dbcu, tblname, primarykey, whereclause, col1, col2, mapfunc):
+#
+def map_column(dbcu, tblname, primarykey, whereclause, col1, col2, mapfunc):
     """Maps col1 to col 2 by calling mapfunc."""
     # BUGBUG: This function only works for INTEGER primary keys
     sql = 'SELECT ' + primarykey + ', ' + col1 + ' FROM ' + tblname + ' WHERE ' + whereclause + ';'
@@ -104,9 +119,12 @@ def map_colum(dbcu, tblname, primarykey, whereclause, col1, col2, mapfunc):
         dbcu.execute(sql)
 
 # sql_to_dataframe is the primary function -- it transforms any SQL query into a Pandas DataFrame!
+#
 # Magic! But it only works if you set row_factory = sqlite3.Row on your connection BEFORE
 # you create your cursor!
+#
 # Otherwise row.keys() in here will fail.
+#
 def sql_to_dataframe(dbcu, sql):
     """Takes an SQL query and returns a Pandas dataframe."""
     count = 0
@@ -131,6 +149,7 @@ def sql_to_dataframe(dbcu, sql):
 
 # dbnameize is a helper function for fields that are
 # unsuitable for use as DB column names.
+#
 def dbnameize(stng):
     """Returns a name suitable for use as a database field name."""
     # make suitable for db field name by making spaces underscores
@@ -143,6 +162,8 @@ def dbnameize(stng):
     return (((((((stng.replace(' ', '_')).replace('-', '_')).replace("'", '')).replace(
         '.', '')).replace('(', '')).replace(')', '')).replace('+', '')).lower()
 
+# get_field_names just nells you the field names in a DB table.
+#
 def get_field_names(dbcu, tblname):
     """Return list of fields from a DB table"""
     # Don't know any other way to get the field names except to do a SELECT *
@@ -154,26 +175,33 @@ def get_field_names(dbcu, tblname):
             columns.append(colname)
     return columns
 
-# This function is like sql_to_dataframe except it just gives us a single number back
-# useful if you're just selecting a count of something or the ID number for something.
-def sql_to_scalar(dbcu, sql):
+# This function is like sql_to_dataframe except it just gives us a single number back.
+#
+# Useful if you're just selecting a count of something or the ID number for something.
+#
+def sql_to_scalar(dbcu, sql, default):
     """Return a single value from an SQL query"""
+    result = default
     for row in dbcu.execute(sql):
         for item in row:
             result = item
     return result
 
+# Example function for importing from a CSV. Pull this out and modify for
+# your own purposes.
+#
 def set_up_example_db(csv_file):
     """Pull in example database. Change this to make your code."""
     exampleconn = sqlite3.connect(':memory:')
     exampleconn.row_factory = sqlite3.Row
     examplecu = exampleconn.cursor()
-    examplecu.execute('CREATE TABLE example (    \
+    examplecu.execute('CREATE TABLE example ( \
                 id INTEGER PRIMARY KEY,       \
+                name TEXT NOT NULL,           \
+                performers TEXT NOT NULL,     \
             );')
     csv_to_database(csv_file, 'example', {'cast':'performers'}, examplecu)
     examplecu.execute('ALTER TABLE example ADD COLUMN revenue_adj_log REAL;')
-    map_colum(examplecu, 'example', 'id', '1', 'revenue_adj', 'revenue_adj_log', mylogp1)
+    # ... call map_column() here if applicable ...
     exampleconn.commit()
     return exampleconn, examplecu
-
